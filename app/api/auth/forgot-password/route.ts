@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma, db } from "@/lib/prisma";import { redis } from "@/lib/redis";
-import { generateResetToken, hashToken } from "@/lib/tokens";
+import { generateResetToken, hashToken } from "@/lib/tokens-server";
 import { verifyTurnstile } from "@/lib/turnstile";
 import { getIP } from "@/lib/fingerprint";
 import { slidingWindowRateLimit } from "@/lib/rate-limit";

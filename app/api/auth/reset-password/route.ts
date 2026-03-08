@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma, db } from "@/lib/prisma";
 import { redis } from "@/lib/redis";
-import { hashToken } from "@/lib/tokens";
+import { hashToken } from "@/lib/tokens-server";
 import { hashPassword, checkPasswordStrength } from "@/lib/password";
 import { deleteAllUserSessions } from "@/lib/session";
 import { slidingWindowRateLimit } from "@/lib/rate-limit";

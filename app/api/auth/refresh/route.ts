@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { redis } from "@/lib/redis";
-import { hashToken, signAccessToken, generateRefreshToken } from "@/lib/tokens";
+import { hashToken, signAccessToken, generateRefreshToken } from "@/lib/tokens-server";
 import { setAuthCookies } from "@/lib/session";
 import { prisma, db } from "@/lib/prisma";
 

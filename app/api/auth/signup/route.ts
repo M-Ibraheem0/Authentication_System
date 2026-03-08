@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma, db } from "@/lib/prisma";
 import { redis } from "@/lib/redis";
 import { hashPassword, checkPasswordStrength } from "@/lib/password";
-import { generateOTP } from "@/lib/tokens";
+import { generateOTP } from "@/lib/tokens-server";
 import { verifyTurnstile } from "@/lib/turnstile";
 import { getFingerprint, getIP } from "@/lib/fingerprint";
 import {

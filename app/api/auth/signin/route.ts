@@ -10,7 +10,7 @@ import {
   incrementFailedAttempts,
 } from "@/lib/rate-limit";
 import { createSession, setAuthCookies } from "@/lib/session";
-import { signTempToken } from "@/lib/tokens";
+import { signTempToken } from "@/lib/tokens-server";
 
 const signinSchema = z.object({
   email: z.string().email("Invalid email"),
