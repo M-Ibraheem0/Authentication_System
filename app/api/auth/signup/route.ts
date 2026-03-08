@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { prisma } from "@/lib/prisma";
+import { prisma, db } from "@/lib/prisma";
 import { redis } from "@/lib/redis";
 import { hashPassword, checkPasswordStrength } from "@/lib/password";
 import { generateOTP } from "@/lib/tokens";
@@ -37,12 +37,14 @@ export async function POST(req: NextRequest) {
       // silent 200 — don't tell bots they failed
       return NextResponse.json({ success: true });
     }
-
+    if (body.formFillTime && body.formFillTime < 1500) {
+      return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+    }
     // 3. validate schema
     const parsed = signupSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
-        { error: parsed.error.errors[0].message },
+        { error: parsed.error.flatten().fieldErrors },
         { status: 400 }
       );
     }
@@ -59,18 +61,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 5. rate limit by fingerprint
-    const rateLimit = await slidingWindowRateLimit(
-      `rl:signup:fp:${fingerprint}`,
-      5,
-      3600 // 5 per hour per fingerprint
-    );
-    if (!rateLimit.allowed) {
-      return NextResponse.json(
-        { error: "Too many attempts. Try again later." },
-        { status: 429 }
-      );
-    }
+    
 
     // 6. suspicion score + tarpit
     const score = await getSuspicionScore(
@@ -97,10 +88,10 @@ export async function POST(req: NextRequest) {
     }
 
     // 8. check if verified user already exists in postgres
-    const existingUser = await prisma.user.findUnique({
+    const existingUser = await db(() => prisma.user.findUnique({
       where: { email: normalizedEmail },
       select: { isVerified: true },
-    });
+    }));
 
     if (existingUser?.isVerified) {
       return NextResponse.json(

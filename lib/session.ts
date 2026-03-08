@@ -1,5 +1,5 @@
 import { redis } from "./redis";
-import { prisma } from "./prisma";
+import { prisma, db } from "@/lib/prisma";
 import { generateRefreshToken, hashToken, signAccessToken } from "./tokens";
 import { NextResponse } from "next/server";
 import crypto from "crypto";

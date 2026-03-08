@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GitHub } from "arctic";
-import { prisma } from "@/lib/prisma";
-import { createSession, setAuthCookies } from "@/lib/session";
+import { prisma, db } from "@/lib/prisma";import { createSession, setAuthCookies } from "@/lib/session";
 import { getIP, getDeviceInfo } from "@/lib/fingerprint";
 
 const github = new GitHub(
@@ -74,7 +73,7 @@ export async function GET(req: NextRequest) {
     }
 
     // 5. check if oauth account exists
-    const existingOAuth = await prisma.oAuthAccount.findUnique({
+    const existingOAuth = await db(() => prisma.oAuthAccount.findUnique({
       where: {
         provider_providerAccountId: {
           provider: "github",
@@ -82,7 +81,7 @@ export async function GET(req: NextRequest) {
         },
       },
       include: { user: true },
-    });
+    }));
 
     if (existingOAuth) {
       const { sessionId, accessToken: jwt, refreshToken } = await createSession(
@@ -101,25 +100,25 @@ export async function GET(req: NextRequest) {
     }
 
     // 6. check if email exists as password user
-    const existingUser = await prisma.user.findUnique({
+    const existingUser = await db(() => prisma.user.findUnique({
       where: { email },
-    });
+    }));
 
     let userId: string;
 
     if (existingUser) {
       // link github to existing account
-      await prisma.oAuthAccount.create({
+      await db(() =>prisma.oAuthAccount.create({
         data: {
           userId: existingUser.id,
           provider: "github",
           providerAccountId: String(githubUser.id),
         },
-      });
+      }));
       userId = existingUser.id;
     } else {
       // create new user
-      const newUser = await prisma.user.create({
+      const newUser = await db(() => prisma.user.create({
         data: {
           email,
           isVerified: true,
@@ -130,7 +129,7 @@ export async function GET(req: NextRequest) {
             },
           },
         },
-      });
+      }));
       userId = newUser.id;
     }
 

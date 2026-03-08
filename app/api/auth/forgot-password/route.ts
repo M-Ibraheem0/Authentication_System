@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { prisma } from "@/lib/prisma";
-import { redis } from "@/lib/redis";
+import { prisma, db } from "@/lib/prisma";import { redis } from "@/lib/redis";
 import { generateResetToken, hashToken } from "@/lib/tokens";
 import { verifyTurnstile } from "@/lib/turnstile";
 import { getIP } from "@/lib/fingerprint";
@@ -42,10 +41,11 @@ export async function POST(req: NextRequest) {
     }
 
     // 3. find user first to get userId for rate limiting
-    const user = await prisma.user.findUnique({
+    const user = await db(() => prisma.user.findUnique({
       where: { email: normalizedEmail },
       select: { id: true, isVerified: true },
-    });
+    }))
+
 
     // 4. rate limit by userId if exists, otherwise by IP
     // max 1 per week

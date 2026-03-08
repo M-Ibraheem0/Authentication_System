@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { prisma } from "@/lib/prisma";
-import { verifyTempToken } from "@/lib/tokens";
+import { prisma, db } from "@/lib/prisma";import { verifyTempToken } from "@/lib/tokens";
 import { createSession, setAuthCookies } from "@/lib/session";
 import { getIP, getDeviceInfo } from "@/lib/fingerprint";
 import { slidingWindowRateLimit, isLockedOut, incrementFailedAttempts } from "@/lib/rate-limit";
@@ -17,19 +16,7 @@ export async function POST(req: NextRequest) {
     const deviceInfo = getDeviceInfo(req);
 
     const body = await req.json();
-
-    // 1. validate schema
-    const parsed = mfaVerifySchema.safeParse(body);
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: parsed.error.flatten().fieldErrors },
-        { status: 400 }
-      );
-    }
-
-    const { tempToken, code } = parsed.data;
-
-    // 2. rate limit
+    // 1. rate limit
     const rateLimit = await slidingWindowRateLimit(
       `rl:mfa:${ip}`,
       5,
@@ -41,6 +28,19 @@ export async function POST(req: NextRequest) {
         { status: 429 }
       );
     }
+    // 2. validate schema
+    const parsed = mfaVerifySchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: parsed.error.flatten().fieldErrors },
+        { status: 400 }
+      );
+    }
+
+    const { tempToken, code } = parsed.data;
+
+    
+    
 
     // 3. lockout check
     const locked = await isLockedOut(ip);
@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 5. get user with mfa secret
-    const user = await prisma.user.findUnique({
+    const user = await db(() => prisma.user.findUnique({
       where: { id: payload.userId },
       select: {
         id: true,
@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
         mfaEnabled: true,
         mfaSecret: true,
       },
-    });
+    }));
 
     if (!user || !user.mfaEnabled || !user.mfaSecret) {
       return NextResponse.json(

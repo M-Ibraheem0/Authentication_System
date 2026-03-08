@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { redis } from "@/lib/redis";
 import { hashToken, signAccessToken, generateRefreshToken } from "@/lib/tokens";
 import { setAuthCookies } from "@/lib/session";
-import { prisma } from "@/lib/prisma";
+import { prisma, db } from "@/lib/prisma";
 
 export async function POST(req: NextRequest) {
   try {
@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
       // token mismatch = possible theft
       // kill the entire session immediately
       await redis.del(`session:${sessionId}`);
-      await prisma.session.deleteMany({ where: { id: sessionId } });
+      await db(() => prisma.session.deleteMany({ where: { id: sessionId } }));
 
       return NextResponse.json(
         { error: "Session invalid" },
@@ -62,10 +62,10 @@ export async function POST(req: NextRequest) {
     );
 
     // 5. update in postgres
-    await prisma.session.update({
+    await db(() => prisma.session.update({
       where: { id: sessionId },
       data: { hashedRefreshToken: newHashedRefreshToken },
-    });
+    }));
 
     // 6. set new cookies
     const response = NextResponse.json(

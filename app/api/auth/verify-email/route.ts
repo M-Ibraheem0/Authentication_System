@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { prisma } from "@/lib/prisma";
+import { prisma, db } from "@/lib/prisma";
 import { redis } from "@/lib/redis";
 import { slidingWindowRateLimit } from "@/lib/rate-limit";
 import { createSession, setAuthCookies } from "@/lib/session";
@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
     const parsed = verifySchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
-        { error: parsed.error.errors[0].message },
+        { error: parsed.error.flatten().fieldErrors },
         { status: 400 }
       );
     }
@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 6. OTP valid — create user in postgres
-    const user = await prisma.user.upsert({
+    const user = await db(() => prisma.user.upsert({
       where: { email: normalizedEmail },
       update: {
         hashedPassword: pending.hashedPassword,
@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
         hashedPassword: pending.hashedPassword,
         isVerified: true,
       },
-    });
+    }));
 
     // 7. cleanup redis
     await redis.del(`pending:signup:${normalizedEmail}`);
@@ -110,6 +110,7 @@ export async function POST(req: NextRequest) {
       {
         success: true,
         user: { id: user.id, email: user.email },
+        message : "Email verified successfully."
       },
       { status: 200 }
     );

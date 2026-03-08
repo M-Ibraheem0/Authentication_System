@@ -1,4 +1,3 @@
-import crypto from "crypto";
 import { NextRequest } from "next/server";
 
 export function getFingerprint(req: NextRequest): string {
@@ -8,12 +7,16 @@ export function getFingerprint(req: NextRequest): string {
     req.headers.get("accept-encoding") ?? "unknown",
     req.headers.get("sec-ch-ua") ?? "unknown",
     req.headers.get("sec-ch-ua-platform") ?? "unknown",
-  ];
+  ].join("|");
 
-  return crypto
-    .createHash("sha256")
-    .update(components.join("|"))
-    .digest("hex");
+  // simple hash without crypto module
+  let hash = 0;
+  for (let i = 0; i < components.length; i++) {
+    const char = components.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash;
+  }
+  return Math.abs(hash).toString(36);
 }
 
 export function getIP(req: NextRequest): string {

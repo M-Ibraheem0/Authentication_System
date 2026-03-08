@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { cookies } from "next/headers";
 import { verifyAccessToken, JWTPayload } from "./tokens";
-import { prisma } from "./prisma";
+import { prisma, db } from "@/lib/prisma";
 
 // use in route handlers (has access to req)
 export async function getAuthFromRequest(

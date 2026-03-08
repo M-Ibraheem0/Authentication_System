@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { prisma } from "@/lib/prisma";
+import { prisma, db } from "@/lib/prisma";
 import { redis } from "@/lib/redis";
 import { hashToken } from "@/lib/tokens";
 import { hashPassword, checkPasswordStrength } from "@/lib/password";
@@ -18,19 +18,8 @@ export async function POST(req: NextRequest) {
   try {
     const ip = getIP(req);
     const body = await req.json();
+    // 1. rate limit — max 5 attempts per hour per IP
 
-    // 1. validate
-    const parsed = resetSchema.safeParse(body);
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: parsed.error.flatten().fieldErrors },
-        { status: 400 }
-      );
-    }
-
-    const { token, userId, newPassword } = parsed.data;
-
-    // 2. rate limit — max 5 attempts per hour per IP
     const rateLimit = await slidingWindowRateLimit(
       `rl:reset:${ip}`,
       5,
@@ -42,6 +31,18 @@ export async function POST(req: NextRequest) {
         { status: 429 }
       );
     }
+    // 2. validate
+    const parsed = resetSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: parsed.error.flatten().fieldErrors },
+        { status: 400 }
+      );
+    }
+
+    const { token, userId, newPassword } = parsed.data;
+
+    
 
     // 3. get stored hash from redis
     const storedHash = await redis.get(`pwd-reset:${userId}`);
@@ -77,10 +78,10 @@ export async function POST(req: NextRequest) {
     const hashedPassword = await hashPassword(newPassword);
 
     // 8. update postgres
-    await prisma.user.update({
+    await db(() => prisma.user.update({
       where: { id: userId },
       data: { hashedPassword },
-    });
+    }));
 
     // 9. kill ALL sessions — someone had the password
     await deleteAllUserSessions(userId);

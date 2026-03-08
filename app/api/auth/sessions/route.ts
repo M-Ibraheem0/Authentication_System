@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAccessToken } from "@/lib/tokens";
-import { prisma } from "@/lib/prisma";
+import { prisma, db } from "@/lib/prisma";
 import { redis } from "@/lib/redis";
 import { deleteSession } from "@/lib/session";
 
@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
     }
 
     // get all sessions from postgres
-    const sessions = await prisma.session.findMany({
+    const sessions = await db(() => prisma.session.findMany({
       where: {
         userId: payload.userId,
         expiresAt: { gt: new Date() }, // only non-expired
@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
         expiresAt: true,
       },
       orderBy: { createdAt: "desc" },
-    });
+    }));
 
     // verify each session still exists in redis
     // postgres and redis can drift — redis is source of truth
@@ -86,10 +86,10 @@ export async function DELETE(req: NextRequest) {
 
     if (revokeAll) {
       // revoke all sessions except current
-      const sessions = await prisma.session.findMany({
+      const sessions = await db(() => prisma.session.findMany({
         where: { userId: payload.userId },
         select: { id: true },
-      });
+      }));
 
       const pipeline = redis.pipeline();
       sessions.forEach((s) => {
@@ -99,12 +99,12 @@ export async function DELETE(req: NextRequest) {
       });
       await pipeline.exec();
 
-      await prisma.session.deleteMany({
+      await db(() => prisma.session.deleteMany({
         where: {
           userId: payload.userId,
           id: { not: currentSessionId },
         },
-      });
+      }));
 
       return NextResponse.json(
         { success: true, message: "All other sessions revoked" },
@@ -120,12 +120,12 @@ export async function DELETE(req: NextRequest) {
     }
 
     // verify the session belongs to this user
-    const session = await prisma.session.findFirst({
+    const session = await db(() => prisma.session.findFirst({
       where: {
         id: sessionId,
         userId: payload.userId,
       },
-    });
+    }));
 
     if (!session) {
       return NextResponse.json(

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { prisma } from "@/lib/prisma";
-import { verifyAccessToken } from "@/lib/tokens";
+import { prisma, db } from "@/lib/prisma";import { verifyAccessToken } from "@/lib/tokens";
 import speakeasy from "speakeasy";
 import { toDataURL } from "qrcode";
 
@@ -22,10 +21,10 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const user = await prisma.user.findUnique({
+    const user = await db(() =>prisma.user.findUnique({
       where: { id: payload.userId },
       select: { email: true, mfaEnabled: true },
-    });
+    }));
 
     if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
@@ -44,10 +43,10 @@ export async function GET(req: NextRequest) {
     const secret = generated.base32;
 
     // store temporarily in postgres (not active until confirmed)
-    await prisma.user.update({
+    await db(() => prisma.user.update({
       where: { id: payload.userId },
       data: { mfaSecret: secret },
-    });
+    }));
 
     // generate QR code
     const otpauth = generated.otpauth_url!; // use this for QR
@@ -90,10 +89,10 @@ export async function POST(req: NextRequest) {
 
     const { code } = parsed.data;
 
-    const user = await prisma.user.findUnique({
+    const user = await db(() =>prisma.user.findUnique({
       where: { id: payload.userId },
       select: { mfaSecret: true, mfaEnabled: true },
-    });
+    }));
 
     if (!user?.mfaSecret) {
       return NextResponse.json(
@@ -125,10 +124,10 @@ export async function POST(req: NextRequest) {
     }
 
     // activate MFA
-    await prisma.user.update({
+    await db(() => prisma.user.update({
       where: { id: payload.userId },
       data: { mfaEnabled: true },
-    });
+    }));
 
     return NextResponse.json(
       { success: true, message: "MFA enabled successfully" },

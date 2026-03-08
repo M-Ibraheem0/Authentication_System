@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Google } from "arctic";
-import { prisma } from "@/lib/prisma";
+import { prisma, db } from "@/lib/prisma";
 import { createSession, setAuthCookies } from "@/lib/session";
 import { getIP, getDeviceInfo } from "@/lib/fingerprint";
 
@@ -64,7 +64,7 @@ export async function GET(req: NextRequest) {
     }
 
     // 4. check if oauth account exists
-    const existingOAuth = await prisma.oAuthAccount.findUnique({
+    const existingOAuth = await db(() => prisma.oAuthAccount.findUnique({
       where: {
         provider_providerAccountId: {
           provider: "google",
@@ -72,7 +72,7 @@ export async function GET(req: NextRequest) {
         },
       },
       include: { user: true },
-    });
+    }));
 
     if (existingOAuth) {
       // user exists, just sign in
@@ -92,25 +92,25 @@ export async function GET(req: NextRequest) {
     }
 
     // 5. check if email already exists as password user
-    const existingUser = await prisma.user.findUnique({
+    const existingUser = await db(() => prisma.user.findUnique({
       where: { email: googleUser.email },
-    });
+    }));
 
     let userId: string;
 
     if (existingUser) {
       // link google to existing account
-      await prisma.oAuthAccount.create({
+      await db(() => prisma.oAuthAccount.create({
         data: {
           userId: existingUser.id,
           provider: "google",
           providerAccountId: googleUser.sub,
         },
-      });
+      }));
       userId = existingUser.id;
     } else {
       // create brand new user
-      const newUser = await prisma.user.create({
+      const newUser = await db(() => prisma.user.create({
         data: {
           email: googleUser.email,
           isVerified: true, // google already verified the email
@@ -121,7 +121,7 @@ export async function GET(req: NextRequest) {
             },
           },
         },
-      });
+      }));
       userId = newUser.id;
     }
 

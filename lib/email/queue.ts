@@ -7,10 +7,10 @@ export const emailQueue = new Queue("emails", {
     attempts: 3,
     backoff: {
       type: "exponential",
-      delay: 2000,
+      delay: 2000, //2min - 4min -8min 
     },
-    removeOnComplete: 100,
-    removeOnFail: 500,
+    removeOnComplete: 100,   //complete email sent redis removal
+    removeOnFail: 500,     //5ms remove redis 
   },
 });
 

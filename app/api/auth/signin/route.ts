@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { prisma } from "@/lib/prisma";
+import { prisma, db } from "@/lib/prisma";
 import { verifyPassword } from "@/lib/password";
 import { verifyTurnstile } from "@/lib/turnstile";
 import { getFingerprint, getIP, getDeviceInfo } from "@/lib/fingerprint";
@@ -30,14 +30,18 @@ export async function POST(req: NextRequest) {
 
     // 1. honeypot
     if (body.honeypot && body.honeypot !== "") {
+      // silent 200 — don't tell bots they failed
       return NextResponse.json({ success: true });
+    }
+    if (body.formFillTime && body.formFillTime < 1500) {
+      return NextResponse.json({ error: "Invalid request" }, { status: 400 });
     }
 
     // 2. validate schema
     const parsed = signinSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
-        { error: parsed.error.errors[0].message },
+        { error: parsed.error.flatten().fieldErrors },
         { status: 400 }
       );
     }
@@ -53,20 +57,6 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-
-    // 4. rate limit by fingerprint
-    const rateLimit = await slidingWindowRateLimit(
-      `rl:signin:fp:${fingerprint}`,
-      10,
-      900 // 10 per 15 min per fingerprint
-    );
-    if (!rateLimit.allowed) {
-      return NextResponse.json(
-        { error: "Too many attempts. Try again later." },
-        { status: 429 }
-      );
-    }
-
     // 5. tarpit suspicious requests
     if (formFillTime && formFillTime < 3000) {
       await new Promise((resolve) => setTimeout(resolve, 10_000));
@@ -83,9 +73,9 @@ export async function POST(req: NextRequest) {
 
     // 7. find user
     // intentionally same error for wrong email or wrong password
-    const user = await prisma.user.findUnique({
+    const user = await db(() => prisma.user.findUnique({
       where: { email: normalizedEmail },
-    });
+    }));
 
     if (!user || !user.hashedPassword) {
       await incrementFailedAttempts(ip);
