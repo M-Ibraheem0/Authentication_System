@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAccessToken } from "@/lib/tokens";
 
-// routes that don't need auth
 const PUBLIC_ROUTES = [
   "/",
   "/auth/signin",
@@ -23,7 +22,6 @@ const PUBLIC_ROUTES = [
   "/api/auth/mfa/verify",
 ];
 
-// routes only for non-authenticated users
 const AUTH_ROUTES = [
   "/auth/signin",
   "/auth/signup",
@@ -43,6 +41,25 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
+  // CRITICAL: never run refresh logic on API routes to prevent loops
+  if (pathname.startsWith("/api/")) {
+    const isPublicApi = PUBLIC_ROUTES.some(
+      (route) => pathname === route || pathname.startsWith(route + "/")
+    );
+    if (isPublicApi) return NextResponse.next();
+
+    // protected API — just check access token, no refresh attempt
+    const accessToken = req.cookies.get("access_token")?.value;
+    if (!accessToken) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const payload = await verifyAccessToken(accessToken);
+    if (!payload) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    return NextResponse.next();
+  }
+
   const isPublicRoute = PUBLIC_ROUTES.some(
     (route) => pathname === route || pathname.startsWith(route + "/")
   );
@@ -51,59 +68,61 @@ export async function middleware(req: NextRequest) {
   const refreshToken = req.cookies.get("refresh_token")?.value;
   const sessionId = req.cookies.get("session_id")?.value;
 
-  // try to validate access token
   let isAuthenticated = false;
-  let payload = null;
 
   if (accessToken) {
-    payload = await verifyAccessToken(accessToken);
-    if (payload) {
-      isAuthenticated = true;
-    }
+    const payload = await verifyAccessToken(accessToken);
+    if (payload) isAuthenticated = true;
   }
 
-  // access token expired but refresh token exists — attempt silent refresh
+  // only attempt refresh on page navigations, not API calls
   if (!isAuthenticated && refreshToken && sessionId) {
-    const refreshResponse = await fetch(
-      `${req.nextUrl.origin}/api/auth/refresh`,
-      {
-        method: "POST",
-        headers: {
-          cookie: req.headers.get("cookie") ?? "",
-        },
-      }
-    );
+    try {
+      const refreshResponse = await fetch(
+        `${req.nextUrl.origin}/api/auth/refresh`,
+        {
+          method: "POST",
+          headers: { cookie: req.headers.get("cookie") ?? "" },
+        }
+      );
 
-    if (refreshResponse.ok) {
-      isAuthenticated = true;
+      if (refreshResponse.ok) {
+        isAuthenticated = true;
 
-      // if trying to access auth route after refresh — redirect to dashboard
-      if (AUTH_ROUTES.some((route) => pathname.startsWith(route))) {
-        const response = NextResponse.redirect(
-          new URL("/dashboard", req.url)
-        );
-        // forward new cookies from refresh response
+        if (AUTH_ROUTES.some((route) => pathname.startsWith(route))) {
+          const response = NextResponse.redirect(new URL("/dashboard", req.url));
+          refreshResponse.headers.getSetCookie().forEach((cookie) => {
+            response.headers.append("set-cookie", cookie);
+          });
+          return response;
+        }
+
+        const response = NextResponse.next();
         refreshResponse.headers.getSetCookie().forEach((cookie) => {
           response.headers.append("set-cookie", cookie);
         });
         return response;
       }
 
-      // forward new cookies on continued navigation
-      const response = NextResponse.next();
-      refreshResponse.headers.getSetCookie().forEach((cookie) => {
-        response.headers.append("set-cookie", cookie);
-      });
-      return response;
+      // refresh failed — clear cookies to prevent further loop attempts
+      if (refreshResponse.status === 401) {
+        const response = NextResponse.redirect(
+          new URL("/auth/signin", req.url)
+        );
+        response.cookies.delete("access_token");
+        response.cookies.delete("refresh_token");
+        response.cookies.delete("session_id");
+        return response;
+      }
+    } catch {
+      // fetch failed — fall through
     }
   }
 
-  // authenticated user trying to access auth pages — redirect to dashboard
   if (isAuthenticated && AUTH_ROUTES.some((route) => pathname.startsWith(route))) {
     return NextResponse.redirect(new URL("/dashboard", req.url));
   }
 
-  // unauthenticated user trying to access protected route
   if (!isAuthenticated && !isPublicRoute) {
     const signInUrl = new URL("/auth/signin", req.url);
     signInUrl.searchParams.set("callbackUrl", pathname);
@@ -114,7 +133,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: [
-    "/((?!_next/static|_next/image|favicon.ico).*)",
-  ],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };

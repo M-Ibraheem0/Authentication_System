@@ -11,7 +11,7 @@ import Link from "next/link";
 function MfaContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const tempToken = searchParams.get("token") ?? "";
+  const tempToken = searchParams.get("tempToken") ?? "";
 
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
@@ -77,7 +77,7 @@ function MfaContent() {
       </div>
 
       <div className="space-y-4">
-        <AnimatePresence>
+        <AnimatePresence mode="wait">
           {error && (
             <motion.div
               initial={{ opacity: 0, y: -8, height: 0 }}

@@ -1,6 +1,6 @@
 import { redis } from "./redis";
 import { prisma, db } from "@/lib/prisma";
-import { generateRefreshToken, hashToken, signAccessToken } from "./tokens";
+import { generateRefreshToken, hashToken, signAccessToken } from "./tokens-server";
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 
@@ -56,7 +56,7 @@ export function setAuthCookies(
   response.cookies.set("access_token", accessToken, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
-    sameSite: "strict",
+    sameSite: "lax",
     maxAge: ACCESS_TOKEN_MAX_AGE,
     path: "/",
   });
@@ -64,7 +64,7 @@ export function setAuthCookies(
   response.cookies.set("refresh_token", refreshToken, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
-    sameSite: "strict",
+    sameSite: "lax",
     maxAge: REFRESH_TOKEN_MAX_AGE,
     path: "/",
   });
@@ -72,7 +72,7 @@ export function setAuthCookies(
   response.cookies.set("session_id", sessionId, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
-    sameSite: "strict",
+    sameSite: "lax",
     maxAge: REFRESH_TOKEN_MAX_AGE,
     path: "/",
   });

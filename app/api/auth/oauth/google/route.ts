@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Google } from "arctic";
+import crypto from "crypto";
 
 const google = new Google(
   process.env.GOOGLE_CLIENT_ID!,
@@ -18,8 +19,8 @@ export async function GET(req: NextRequest) {
       "profile",
     ]);
 
+    url.searchParams.set("prompt", "select_account"); // ← add this
     const response = NextResponse.redirect(url);
-
     // store state + codeVerifier in cookies for callback verification
     response.cookies.set("google_oauth_state", state, {
       httpOnly: true,
